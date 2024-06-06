@@ -219,6 +219,119 @@ resource "aws_instance" "tpd_book" {
   }
 }
 
+resource "aws_instance" "tpd_user_2" {
+  ami             = "ami-04b70fa74e45c3917"
+  instance_type   = "t2.small"
+  key_name        = aws_key_pair.deployer.key_name
+  security_groups = [aws_security_group.all_traffic.name]
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get update",
+      "sudo apt upgrade -y",
+      "sudo apt-get install -y openjdk-17-jdk",
+      "sudo apt-get install -y maven",
+      "mkdir -p /home/ubuntu"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  provisioner "file" {
+    source      = "~/tpd"
+    destination = "/home/ubuntu/project"
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cd /home/ubuntu/project",
+      "sed -i 's|_POSTGRES_CHANGEME_URL_|${aws_db_instance.postgres.endpoint}|g' TPD_EAR_USER/pom.xml",
+      "sed -i 's|_POSTGRES_CHANGEME_USERNAME_|${var.postgres_username}|g' TPD_EAR_USER/pom.xml",
+      "sed -i 's|_POSTGRES_CHANGEME_PASSWORD_|${var.postgres_password}|g' TPD_EAR_USER/pom.xml",
+      "mvn clean install",
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  tags = {
+    Name = "TPD_USER_2"
+  }
+}
+
+resource "aws_instance" "tpd_book_2" {
+  ami             = "ami-04b70fa74e45c3917"
+  instance_type   = "t2.small"
+  key_name        = aws_key_pair.deployer.key_name
+  security_groups = [aws_security_group.all_traffic.name]
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get update",
+      "sudo apt upgrade -y",
+      "sudo apt-get install -y openjdk-17-jdk",
+      "sudo apt-get install -y maven",
+      "mkdir -p /home/ubuntu"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  provisioner "file" {
+    source      = "~/tpd"
+    destination = "/home/ubuntu/project"
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cd /home/ubuntu/project",
+      "sed -i 's|_POSTGRES_CHANGEME_URL_|${aws_db_instance.postgres.endpoint}|g' TPD_EAR_BOOK/pom.xml",
+      "sed -i 's|_POSTGRES_CHANGEME_USERNAME_|${var.postgres_username}|g' TPD_EAR_BOOK/pom.xml",
+      "sed -i 's|_POSTGRES_CHANGEME_PASSWORD_|${var.postgres_password}|g' TPD_EAR_BOOK/pom.xml",
+      "mvn clean install",
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  tags = {
+    Name = "TPD_BOOK_2"
+  }
+}
 
 data "aws_subnets" "default" {
   filter {
@@ -270,6 +383,12 @@ resource "aws_lb_target_group_attachment" "tpd_user" {
   port             = 8080
 }
 
+resource "aws_lb_target_group_attachment" "tpd_user_2" {
+  target_group_arn = aws_lb_target_group.tpd_user.arn
+  target_id        = aws_instance.tpd_user_2.id
+  port             = 8080
+}
+
 resource "aws_lb" "tpd_book" {
   name               = "tpd-book-lb"
   internal           = false
@@ -310,6 +429,12 @@ resource "aws_lb_listener" "tpd_book" {
 resource "aws_lb_target_group_attachment" "tpd_book" {
   target_group_arn = aws_lb_target_group.tpd_book.arn
   target_id        = aws_instance.tpd_book.id
+  port             = 8080
+}
+
+resource "aws_lb_target_group_attachment" "tpd_book_2" {
+  target_group_arn = aws_lb_target_group.tpd_book.arn
+  target_id        = aws_instance.tpd_book_2.id
   port             = 8080
 }
 
@@ -368,6 +493,64 @@ resource "aws_instance" "tpd_web" {
     Name = "TPD_WEB"
   }
 }
+
+resource "aws_instance" "tpd_web_2" {
+  ami             = "ami-04b70fa74e45c3917"
+  instance_type   = "t2.small"
+  key_name        = aws_key_pair.deployer.key_name
+  security_groups = [aws_security_group.all_traffic.name]
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get update",
+      "sudo apt upgrade -y",
+      "sudo apt-get install -y openjdk-17-jdk",
+      "sudo apt-get install -y maven",
+      "mkdir -p /home/ubuntu"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  provisioner "file" {
+    source      = "~/tpd"
+    destination = "/home/ubuntu/project"
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cd /home/ubuntu/project",
+      "mvn clean install",
+      "sed -i 's|user_endpoint=localhost:8080|user_endpoint=${aws_lb.tpd_user.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
+      "sed -i 's|book_endpoint=localhost:8080|book_endpoint=${aws_lb.tpd_book.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/tpd_aws")
+      host        = self.public_ip
+    }
+  }
+
+  tags = {
+    Name = "TPD_WEB_2"
+  }
+}
+
+
 resource "aws_lb" "tpd_web" {
   name               = "tpd-web-lb"
   internal           = false
@@ -413,5 +596,11 @@ resource "aws_lb_listener" "tpd_web" {
 resource "aws_lb_target_group_attachment" "tpd_web" {
   target_group_arn = aws_lb_target_group.tpd_web.arn
   target_id        = aws_instance.tpd_web.id
+  port             = 8080
+}
+
+resource "aws_lb_target_group_attachment" "tpd_web_2" {
+  target_group_arn = aws_lb_target_group.tpd_web.arn
+  target_id        = aws_instance.tpd_web_2.id
   port             = 8080
 }
