@@ -82,6 +82,13 @@ resource "aws_security_group" "all_traffic" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  egress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 resource "aws_db_instance" "postgres" {
@@ -212,6 +219,100 @@ resource "aws_instance" "tpd_book" {
   }
 }
 
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+resource "aws_lb" "tpd_user" {
+  name               = "tpd-user-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.all_traffic.id]
+  subnets            = data.aws_subnets.default.ids
+
+  enable_deletion_protection = false
+}
+
+resource "aws_lb_target_group" "tpd_user" {
+  name     = "tpd-user-tg"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 5
+    unhealthy_threshold = 2
+  }
+}
+
+resource "aws_lb_listener" "tpd_user" {
+  load_balancer_arn = aws_lb.tpd_user.arn
+  port              = "8080"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tpd_user.arn
+  }
+}
+
+resource "aws_lb_target_group_attachment" "tpd_user" {
+  target_group_arn = aws_lb_target_group.tpd_user.arn
+  target_id        = aws_instance.tpd_user.id
+  port             = 8080
+}
+
+resource "aws_lb" "tpd_book" {
+  name               = "tpd-book-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.all_traffic.id]
+  subnets            = data.aws_subnets.default.ids
+
+  enable_deletion_protection = false
+}
+
+resource "aws_lb_target_group" "tpd_book" {
+  name     = "tpd-book-tg"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 5
+    unhealthy_threshold = 2
+  }
+}
+
+resource "aws_lb_listener" "tpd_book" {
+  load_balancer_arn = aws_lb.tpd_book.arn
+  port              = "8080"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tpd_book.arn
+  }
+}
+
+resource "aws_lb_target_group_attachment" "tpd_book" {
+  target_group_arn = aws_lb_target_group.tpd_book.arn
+  target_id        = aws_instance.tpd_book.id
+  port             = 8080
+}
+
 resource "aws_instance" "tpd_web" {
   ami             = "ami-04b70fa74e45c3917"
   instance_type   = "t2.small"
@@ -251,8 +352,8 @@ resource "aws_instance" "tpd_web" {
     inline = [
       "cd /home/ubuntu/project",
       "mvn clean install",
-      "sed -i 's|user_endpoint=localhost:8080|user_endpoint=${aws_instance.tpd_user.public_ip}:8080|g' TPD_WEB/src/main/resources/config.properties",
-      "sed -i 's|book_endpoint=localhost:8080|book_endpoint=${aws_instance.tpd_book.public_ip}:8080|g' TPD_WEB/src/main/resources/config.properties",
+      "sed -i 's|user_endpoint=localhost:8080|user_endpoint=${aws_lb.tpd_user.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
+      "sed -i 's|book_endpoint=localhost:8080|book_endpoint=${aws_lb.tpd_book.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
     ]
 
     connection {
@@ -266,4 +367,51 @@ resource "aws_instance" "tpd_web" {
   tags = {
     Name = "TPD_WEB"
   }
+}
+resource "aws_lb" "tpd_web" {
+  name               = "tpd-web-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.all_traffic.id]
+  subnets            = data.aws_subnets.default.ids
+
+  enable_deletion_protection = false
+}
+
+resource "aws_lb_target_group" "tpd_web" {
+  name     = "tpd-web-tg"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 5
+    unhealthy_threshold = 2
+  }
+
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400
+  }
+}
+
+resource "aws_lb_listener" "tpd_web" {
+  load_balancer_arn = aws_lb.tpd_web.arn
+  port              = "8080"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tpd_web.arn
+  }
+}
+
+resource "aws_lb_target_group_attachment" "tpd_web" {
+  target_group_arn = aws_lb_target_group.tpd_web.arn
+  target_id        = aws_instance.tpd_web.id
+  port             = 8080
 }
