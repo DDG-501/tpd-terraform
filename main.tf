@@ -18,6 +18,12 @@ resource "aws_key_pair" "deployer" {
   public_key = file("~/.ssh/tpd_aws.pub")
 }
 
+resource "aws_iam_server_certificate" "self_signed_cert" {
+  name             = "my-self-signed-cert"
+  certificate_body = file("self-signed.crt")
+  private_key      = file("self-signed.key")
+}
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -292,7 +298,10 @@ resource "aws_lb_target_group" "tpd_user" {
 resource "aws_lb_listener" "tpd_user" {
   load_balancer_arn = aws_lb.tpd_user.arn
   port              = "8080"
-  protocol          = "HTTP"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_iam_server_certificate.self_signed_cert.arn
+
 
   default_action {
     type             = "forward"
@@ -337,7 +346,10 @@ resource "aws_lb_target_group" "tpd_book" {
 resource "aws_lb_listener" "tpd_book" {
   load_balancer_arn = aws_lb.tpd_book.arn
   port              = "8080"
-  protocol          = "HTTP"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_iam_server_certificate.self_signed_cert.arn
+
 
   default_action {
     type             = "forward"
@@ -394,8 +406,9 @@ resource "aws_instance" "tpd_web_instances" {
   provisioner "remote-exec" {
     inline = [
       "cd /home/ubuntu/project",
-      "sed -i 's|user_endpoint=localhost:8080|user_endpoint=${aws_lb.tpd_user.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
-      "sed -i 's|book_endpoint=localhost:8080|book_endpoint=${aws_lb.tpd_book.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
+      "sed -i 's|user_endpoint=http://localhost:8080|user_endpoint=https://${aws_lb.tpd_user.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
+      "sed -i 's|book_endpoint=http://localhost:8080|book_endpoint=https://${aws_lb.tpd_book.dns_name}:8080|g' TPD_WEB/src/main/resources/config.properties",
+      "sed -i 's|certificate_path=_replace_cert_path_|certificate_path=/home/ubuntu/project/self-signed.crt|g' TPD_WEB/src/main/resources/config.properties",
       "echo '[Unit]' | sudo tee /etc/systemd/system/tpd.service",
       "echo 'Description=TPD Service' | sudo tee -a /etc/systemd/system/tpd.service",
       "echo 'After=network.target' | sudo tee -a /etc/systemd/system/tpd.service",
@@ -465,7 +478,10 @@ resource "aws_lb_target_group" "tpd_web" {
 resource "aws_lb_listener" "tpd_web" {
   load_balancer_arn = aws_lb.tpd_web.arn
   port              = "8080"
-  protocol          = "HTTP"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_iam_server_certificate.self_signed_cert.arn
+
 
   default_action {
     type             = "forward"
@@ -482,13 +498,13 @@ resource "aws_lb_target_group_attachment" "tpd_web" {
 }
 
 output "user_gateway" {
-  value = "http://${aws_lb.tpd_user.dns_name}:8080/TPD_USER/"
+  value = "https://${aws_lb.tpd_user.dns_name}:8080/TPD_USER/"
 }
 
 output "book_gateway" {
-  value = "http://${aws_lb.tpd_book.dns_name}:8080/TPD_BOOK/"
+  value = "https://${aws_lb.tpd_book.dns_name}:8080/TPD_BOOK/"
 }
 
 output "web_gateway" {
-  value = "http://${aws_lb.tpd_web.dns_name}:8080/TPD_WEB/index.xhtml"
+  value = "https://${aws_lb.tpd_web.dns_name}:8080/TPD_WEB/index.xhtml "
 }
